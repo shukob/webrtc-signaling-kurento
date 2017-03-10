@@ -17,6 +17,7 @@
 
 import KurentoHelper from "../kurento/kurento_helper";
 import uuid from 'node-uuid'
+import ws from "ws";
 /*
  * Definition of functions
  */
@@ -24,12 +25,13 @@ import uuid from 'node-uuid'
 export default class Server {
 
     boot(server, path) {
+        var self = this;
         var wss = new ws.Server({
             server: server,
             path: path
         });
 
-
+        console.log('Serving one2many broadcast signaling on ' + path + '...');
         /*
          * Management of WebSocket messages
          */
@@ -40,10 +42,10 @@ export default class Server {
 
             ws.on('error', function (error) {
                 console.log('Connection ' + sessionId + ' error');
-                for (let room in this.viewerLists) {
-                    for (let i in this.viewerLists[room]) {
+                for (let room in self.viewerLists) {
+                    for (let i in self.viewerLists[room]) {
                         if (i === sessionId) {
-                            this.stop(room, sessionId);
+                            self.stop(room, sessionId);
                         }
                     }
                 }
@@ -51,10 +53,10 @@ export default class Server {
 
             ws.on('close', function () {
                 console.log('Connection ' + sessionId + ' closed');
-                for (let room in this.viewerLists) {
-                    for (let i in this.viewerLists[room]) {
+                for (let room in self.viewerLists) {
+                    for (let i in self.viewerLists[room]) {
                         if (i === sessionId) {
-                            this.stop(room, sessionId);
+                            self.stop(room, sessionId);
                         }
                     }
                 }
@@ -66,7 +68,7 @@ export default class Server {
 
                 switch (message.id) {
                     case 'presenter':
-                        this.startPresenter(message.room, sessionId, ws, message.sdpOffer, function (error, sdpAnswer) {
+                        self.startPresenter(message.room, sessionId, ws, message.sdpOffer, (error, sdpAnswer) => {
                             if (error) {
                                 return ws.send(JSON.stringify({
                                     id: 'presenterResponse',
@@ -83,7 +85,7 @@ export default class Server {
                         break;
 
                     case 'viewer':
-                        this.startViewer(message.room, sessionId, ws, message.sdpOffer, function (error, sdpAnswer) {
+                        self.startViewer(message.room, sessionId, ws, message.sdpOffer, (error, sdpAnswer) => {
                             if (error) {
                                 return ws.send(JSON.stringify({
                                     id: 'viewerResponse',
@@ -101,11 +103,11 @@ export default class Server {
                         break;
 
                     case 'stop':
-                        this.stop(message.room, sessionId);
+                        self.stop(message.room, sessionId);
                         break;
 
                     case 'onIceCandidate':
-                        this.onIceCandidate(message.room, sessionId, message.candidate);
+                        self.onIceCandidate(message.room, sessionId, message.candidate);
                         break;
 
                     default:
@@ -137,10 +139,10 @@ export default class Server {
 
     startPresenter(room, sessionId, ws, sdpOffer, callback) {
         var self = this;
-        this.clearCandidatesQueue(sessionId);
+        self.clearCandidatesQueue(sessionId);
 
         if (self.presenters[room] !== null) {
-            stop(room, sessionId);
+            self.stop(room, sessionId);
             return callback("Another user is currently acting as presenter. Try again later ...");
         }
 
@@ -151,7 +153,7 @@ export default class Server {
         };
         self.presenters[room] = presenter;
 
-        self.kurentoHelper.getKurentoClient(function (error, kurentoClient) {
+        self.kurentoHelper.getKurentoClient((error, kurentoClient) => {
             if (error) {
                 self.stop(room, sessionId);
                 return callback(error);
@@ -163,7 +165,7 @@ export default class Server {
                 return callback(Server.noPresenterMessage);
             }
 
-            kurentoClient.create('MediaPipeline', function (error, pipeline) {
+            kurentoClient.create('MediaPipeline', (error, pipeline) => {
                 if (error) {
                     self.stop(room, sessionId);
                     return callback(error);
@@ -175,7 +177,7 @@ export default class Server {
                 }
 
                 self.presenters[room].pipeline = pipeline;
-                pipeline.create('WebRtcEndpoint', function (error, webRtcEndpoint) {
+                pipeline.create('WebRtcEndpoint', (error, webRtcEndpoint) => {
                     if (error) {
                         self.stop(room, sessionId);
                         return callback(error);
@@ -195,7 +197,7 @@ export default class Server {
                         }
                     }
 
-                    webRtcEndpoint.on('OnIceCandidate', function (event) {
+                    webRtcEndpoint.on('OnIceCandidate', (event) => {
                         var candidate = self.kurentoHelper.getIceCandidates(event.candidate);
                         ws.send(JSON.stringify({
                             id: 'iceCandidate',
@@ -203,7 +205,7 @@ export default class Server {
                         }));
                     });
 
-                    webRtcEndpoint.processOffer(sdpOffer, function (error, sdpAnswer) {
+                    webRtcEndpoint.processOffer(sdpOffer, (error, sdpAnswer) => {
                         if (error) {
                             self.stop(room, sessionId);
                             return callback(error);
@@ -217,7 +219,7 @@ export default class Server {
                         callback(null, sdpAnswer);
                     });
 
-                    webRtcEndpoint.gatherCandidates(function (error) {
+                    webRtcEndpoint.gatherCandidates((error) => {
                         if (error) {
                             self.stop(room, sessionId);
                             return callback(error);
@@ -237,7 +239,7 @@ export default class Server {
             return callback(Server.noPresenterMessage);
         }
 
-        self.presenters[room].pipeline.create('WebRtcEndpoint', function (error, webRtcEndpoint) {
+        self.presenters[room].pipeline.create('WebRtcEndpoint', (error, webRtcEndpoint) => {
             if (error) {
                 self.stop(room, sessionId);
                 return callback(error);
@@ -262,7 +264,7 @@ export default class Server {
                 }
             }
 
-            webRtcEndpoint.on('OnIceCandidate', function (event) {
+            webRtcEndpoint.on('OnIceCandidate', (event) => {
                 var candidate = self.kurentoHelper.getIceCandidates(event.candidate);
                 ws.send(JSON.stringify({
                     id: 'iceCandidate',
@@ -270,7 +272,7 @@ export default class Server {
                 }));
             });
 
-            webRtcEndpoint.processOffer(sdpOffer, function (error, sdpAnswer) {
+            webRtcEndpoint.processOffer(sdpOffer, (error, sdpAnswer) => {
                 if (error) {
                     self.stop(room, sessionId);
                     return callback(error);
@@ -280,7 +282,7 @@ export default class Server {
                     return callback(Server.noPresenterMessage);
                 }
 
-                self.presenters[room].webRtcEndpoint.connect(webRtcEndpoint, function (error) {
+                self.presenters[room].webRtcEndpoint.connect(webRtcEndpoint, (error) => {
                     if (error) {
                         self.stop(room, sessionId);
                         return callback(error);

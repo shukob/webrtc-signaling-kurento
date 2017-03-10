@@ -1,6 +1,7 @@
 // Represents a B2B active call
 
 import UserRegistry from "./user_registry";
+import ws from "ws";
 /*
  * Server startup
  */
@@ -14,8 +15,10 @@ export default class Server {
         var self = this;
         var wss = new ws.Server({
             server: server,
-            path: '/one2one'
+            path: path
         });
+
+        console.log('Serving one2one direct call signaling on ' + path + '...');
 
         wss.on('connection', function (ws) {
             var sessionId = nextUniqueId();
@@ -192,5 +195,3 @@ export default class Server {
 
 }
 
-
-app.use(express.static(path.join(__dirname, 'static')));

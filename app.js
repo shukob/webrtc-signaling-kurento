@@ -29,7 +29,7 @@ var app = express();
 var asUrl = url.parse(argv.as_uri);
 var port = asUrl.port;
 var server = http.createServer(app).listen(port, function () {
-    console.log('Kurento Tutorial started');
+    console.log('Kurento enabled signaling server started...');
     console.log('Open ' + url.format(asUrl) + ' with a WebRTC capable browser');
 });
 
